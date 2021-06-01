@@ -1,0 +1,53 @@
+name: Code the style
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  code:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'Octocat style')
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    
+    - name: Get the style type
+      uses: actions/github-script@v3
+      id: get-style-type
+      with:  
+        result-encoding: string
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          let rgx = /type:\'(\w+)\'/gm
+          let styleType = rgx.exec(context.payload.comment.body)[1].trim()
+          console.log(styleType)
+          return styleType
+    - name: Get the style option
+      uses: actions/github-script@v3
+      id: get-style-option
+      with:  
+        result-encoding: string
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          let rgx = /style:\'(\w+)\'/gm
+          let styleOption = rgx.exec(context.payload.comment.body)[1].trim()
+          console.log(styleOption)
+          return styleOption
+    - name: Debug 
+      run: |
+        echo "Style is ${{steps.get-style-type.outputs.result}}"
+        echo "Option is ${{steps.get-style-option.outputs.result}}"
+    - name: Code 
+      run: sed -i -e $'s+//CODE_HERE+octocat.set${{steps.get-style-type.outputs.result}}("${{steps.get-style-option.outputs.result}}")\\\n\\\t\\\t\\\t\\\t//CODE_HERE+' ./src/components/Octocat.vue
+    - name: Debug
+      run: cat ./src/components/Octocat.vue
+    - name: Commit & Push
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add .
+        git commit -m "Octocat generated"
+        git push
+

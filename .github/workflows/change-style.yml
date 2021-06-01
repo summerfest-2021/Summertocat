@@ -1,0 +1,109 @@
+name: Change Octocat style
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  detect_style_type:
+    name: Detect style type
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'Octocat style')
+    outputs:
+      styleType: ${{ fromJSON(steps.getStyleChoices.outputs.result).styleType }}
+      styleOption: ${{ fromJSON(steps.getStyleChoices.outputs.result).styleOption }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      
+    - name: Get Style type
+      uses: actions/github-script@v3
+      id: getStyleChoices
+      with:  
+        result-encoding: json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          let rgx = /-\s\[x\]\s(.*)/gm
+          let body = context.payload.issue.body
+          let rgxMatch = [...body.matchAll(rgx)]
+
+          // console.log(rgxMatch)
+
+          if (rgxMatch && rgxMatch.length > 0) {
+            let styleType = rgxMatch[0][1]
+            console.log(styleType)
+            
+            if (styleType.includes('<!--checked style-->')) {
+              // Style was already selected 
+              styleType = styleType.replace('<!--checked style-->', '')
+
+              if (rgxMatch.length > 1) {
+                let styleOption = rgxMatch[1][1]
+                console.log(styleOption)
+                let commentBody = `A ${styleOption.toLowerCase()}??? Great idea, let's do this :man_dancing:!!!!<!--{type:'${styleType}',style:'${styleOption}'}-->`
+                github.issues.createComment(
+                  {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.issue.number,
+                    body: commentBody
+                  }
+                )
+                return {styleType: styleType, styleOption: styleOption}
+              }
+            } else {
+              // Style was not already selected. We need to provide options.
+              let newBody = context.payload.issue.body
+              newBody = newBody.replace(styleType, `${styleType}<!--checked style-->`)
+
+              const fs = require('fs')
+              fs.readFile(`./.github/styles/${styleType}.md`, 'utf8' , (err, data) => {
+                if (err) {
+                  console.error(err)
+                  return
+                } else {
+                  newBody = newBody + '\n<!--style options-->' + data
+                  github.issues.update(
+                    {
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: context.payload.issue.number,
+                      body: newBody
+                    }
+                  )
+                }
+              })
+            } 
+            return {styleType: styleType}
+          }
+      
+    - name: Debug
+      run: |
+        echo ${{ fromJSON(steps.getStyleChoices.outputs.result).styleType }}
+        echo ${{ fromJSON(steps.getStyleChoices.outputs.result).styleOption }}
+  
+  code:
+    name: Code the Octocat
+    runs-on: ubuntu-latest
+    needs: detect_style_type
+    if: needs.detect_style_type.outputs.styleOption && needs.detect_style_type.outputs.styleType
+
+    steps:
+    - name: Debug
+      run: |
+        echo ${{ needs.detect_style_type.outputs.styleType }}
+        echo ${{ needs.detect_style_type.outputs.styleOption }}
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Code 
+      run: sed -i -e $'s+//CODE_HERE+octocat.set${{needs.detect_style_type.outputs.styleType}}("${{needs.detect_style_type.outputs.styleOption}}")\\\n\\\t\\\t\\\t\\\t//CODE_HERE+' ./src/components/Octocat.vue
+    - name: Debug
+      run: cat ./src/components/Octocat.vue
+    - name: Commit & Push
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add .
+        git commit -m "Octocat generated"
+        git push

@@ -1,0 +1,65 @@
+name: Create Octocat repository
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on:
+  issues:
+    types: [opened, reopened]
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      name:
+        # Friendly description to be shown in the UI instead of 'name'
+        description: 'Name of the Octocat'
+        # Default value if no value is explicitly provided
+        default: 'Summertocat'
+        # Input has to be provided for the workflow to run
+        required: true
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Export repo name from input
+      if: github.event_name == 'workflow_dispatch'
+      run: echo "REPO_NAME=${{github.event.inputs.name}}" >> $GITHUB_ENV
+    - name: Get repo name from issue
+      if: contains(github.event.issue.labels.*.name, 'New Octocat')
+      uses: actions/github-script@v3
+      id: get-repo-name
+      with:  
+        result-encoding: string
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          console.log(context.payload.issue.body)
+          let rgx = /I want to name my Octocat:(.*)/gm
+          let repoName = rgx.exec(context.payload.issue.body)[1].trim()
+          console.log(repoName)
+          return repoName
+    - name: Export repo name from issue
+      if: contains(github.event.issue.labels.*.name, 'New Octocat')
+      run: echo "REPO_NAME=${{steps.get-repo-name.outputs.result}}" >> $GITHUB_ENV
+    - name: Create repo
+      uses: actions/github-script@v3
+      if: env.REPO_NAME
+      with:
+        github-token: ${{ secrets.TOKEN }}
+        script: |
+          await github.repos.createUsingTemplate(
+            {
+              owner: context.repo.owner,
+              name: '${{env.REPO_NAME}}',
+              template_repo: context.repo.repo,
+              template_owner: context.repo.owner
+            }
+          )
+          github.issues.createLabel(
+            {
+              owner: context.repo.owner,
+              repo: '${{env.REPO_NAME}}',
+              name: 'Octocat style'
+            }
+          )
+          
+          
