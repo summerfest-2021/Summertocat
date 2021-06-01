@@ -18,6 +18,7 @@ export default {
         octocat = new Octocat();
         octocat.setBodyColor({ primary: "#282828", underside: "#494949", suctions: "#99C7C9" })
 				octocat.setTop("Hawaiian Shirt")
+				octocat.setHeadgear("Sombrero")
 				//CODE_HERE
       }     
       
